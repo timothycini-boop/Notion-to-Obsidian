@@ -8,8 +8,6 @@ access to. Updated for Notion API 2025-09-03. Captures page properties
 
 - Standalone pages → backup/_pages/
 - Data source rows → backup/<Source Name>/
-
-Add data source names to EXCLUDED_DATABASES to skip them entirely.
 """
 
 import os
@@ -17,11 +15,6 @@ import re
 import shutil
 from pathlib import Path
 from notion_client import Client
-
-# ---------- Config ----------
-
-EXCLUDED_DATABASES = [
-]
 
 # ---------- Setup ----------
 
@@ -54,6 +47,10 @@ def rich_text_to_md(rich_text):
         out.append(text)
     return "".join(out)
 
+def indent_md(md, level=1):
+    prefix = "  " * level
+    return "\n".join(prefix + line if line else "" for line in md.splitlines())
+
 def block_to_md(block):
     btype = block.get("type")
     data = block.get(btype, {})
@@ -74,7 +71,11 @@ def block_to_md(block):
         checked = "x" if data.get("checked") else " "
         return f"- [{checked}] " + rich_text_to_md(data.get("rich_text", []))
     if btype == "toggle":
-        return "- " + rich_text_to_md(data.get("rich_text", []))
+        title = rich_text_to_md(data.get("rich_text", [])) or "Untitled"
+        children = render_blocks(get_all_blocks(block["id"])) if block.get("has_children") else ""
+        if not children:
+            return f"<details>\n<summary>{title}</summary>\n</details>"
+        return f"<details>\n<summary>{title}</summary>\n\n{children}\n\n</details>"
     if btype == "code":
         lang = data.get("language", "")
         text = "".join(rt.get("plain_text", "") for rt in data.get("rich_text", []))
@@ -98,6 +99,27 @@ def block_to_md(block):
             return f"🗄️ **Linked database:** {name}"
         return f"🗄️ **Linked database** *(unresolved)*"
     return f"<!-- unsupported block: {btype} -->"
+
+def render_block(block, indent_level=0):
+    md = block_to_md(block)
+    btype = block.get("type")
+
+    if block.get("has_children") and btype != "toggle":
+        children = render_blocks(get_all_blocks(block["id"]), indent_level + 1)
+        if children:
+            md = f"{md}\n{children}"
+
+    if indent_level:
+        return indent_md(md, indent_level)
+    return md
+
+def render_blocks(blocks, indent_level=0):
+    rendered = []
+    for block in blocks:
+        md = render_block(block, indent_level)
+        if md:
+            rendered.append(md)
+    return "\n\n".join(rendered)
 
 def get_all_blocks(block_id):
     blocks, cursor = [], None
@@ -230,11 +252,10 @@ def page_to_markdown(page, source_database=None):
         lines.extend(prop_lines)
         lines.append("")
 
-    for block in blocks:
-        md = block_to_md(block)
-        if md:
-            lines.append(md)
-            lines.append("")
+    body = render_blocks(blocks)
+    if body:
+        lines.append(body)
+        lines.append("")
     return "\n".join(lines)
 
 # ---------- Discovery (2025-09-03 API) ----------
@@ -294,7 +315,8 @@ def main():
     sources = get_all_data_sources()
     print(f"Found {len(sources)} data sources.\n")
 
-    source_data = {}  # source_id -> {"name": str, "rows": list, "skipped": bool}
+    source_data = {}  # source_id -> {"name": str, "rows": list}
+    sources_failed = 0
     for src in sources:
         name = get_source_title(src)
         _source_id_to_name[src["id"]] = name
@@ -302,31 +324,23 @@ def main():
         if parent_db:
             _source_id_to_name[parent_db] = name
 
-        if name in EXCLUDED_DATABASES:
-            print(f"Will skip: {name}")
-            source_data[src["id"]] = {"name": name, "rows": [], "skipped": True}
-            continue
-
         print(f"Querying: {name}")
         try:
             rows = query_data_source_rows(src["id"])
             print(f"  {len(rows)} rows")
-            source_data[src["id"]] = {"name": name, "rows": rows, "skipped": False}
+            source_data[src["id"]] = {"name": name, "rows": rows}
             for row in rows:
                 _row_id_to_title[row["id"]] = get_page_title(row)
         except Exception as e:
             print(f"  ERROR querying {name}: {e}")
-            source_data[src["id"]] = {"name": name, "rows": [], "skipped": True}
+            sources_failed += 1
 
     # --- Pass 2: Render rows (relations can now resolve to names) ---
     print(f"\n--- Rendering rows ---")
     processed_ids = set()
-    rows_saved = rows_failed = sources_skipped = 0
+    rows_saved = rows_failed = 0
 
     for src_id, info in source_data.items():
-        if info["skipped"]:
-            sources_skipped += 1
-            continue
         name = info["name"]
         rows = info["rows"]
         subfolder = BACKUP_DIR / safe_filename(name)
@@ -370,7 +384,7 @@ def main():
             page_failed += 1
 
     print(f"\n--- Summary ---")
-    print(f"Data sources: {len(sources) - sources_skipped} processed, {sources_skipped} skipped.")
+    print(f"Data sources: {len(source_data)} processed, {sources_failed} failed.")
     print(f"Rows: {rows_saved} saved, {rows_failed} failed.")
     print(f"Pages: {page_saved} saved, {page_failed} failed, {page_dedup} deduped.")
 
