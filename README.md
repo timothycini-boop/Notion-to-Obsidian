@@ -3,84 +3,71 @@ Back up your Notion workspace to GitHub as Markdown each week. Useful for disast
 
 ----
 
-I built this because Notion is great right up to the point you can't get to it. All my work systems, contracts, project notes, personal writing, they live there. If Notion goes down, or my account gets locked, or they kill a feature I depend on, or any of a dozen other things, I lose access to material I genuinely need. And Notion's own export only gives you JSON dumps and CSVs that are fine for a worst-case restore but useless for anything else.
+# Notion Markdown Backup
 
-I wanted a second copy of my workspace that I actually own, in a format I can read offline, search through, and open in another tool if I want to. This is that.
+I built this because Notion is great until you can't get to it. All my important stuff lives there. If Notion goes down or my account gets locked, I lose access. And Notion's own export gives you JSON and CSV that's fine for a worst-case restore but useless otherwise.
 
-It runs on GitHub Actions every Sunday at 3am UTC. It walks your Notion workspace, converts every page and database row into Markdown with YAML frontmatter, and commits the result back to your repo. Total cost: $0. Total maintenance: nothing once it's set up, unless you want a fresh copy on your laptop.
+This makes a second copy of your workspace in Markdown — readable, searchable, owned. It runs weekly via GitHub Actions for free. Drop it into Obsidian and you get an offline vault with relations preserved as wikilinks, plus Obsidian's graph view: an interactive map of how everything in your workspace connects. Notion doesn't offer that.
 
-The result is a `backup/` folder you can:
-
-- Browse on GitHub
-- Clone to your laptop with GitHub Desktop
-- Open as a vault in Obsidian — every relation between database rows becomes a clickable wikilink, so your knowledge graph survives the move
-- Read on a plane, on a phone, on anything that reads text files
-
-This is a backup, not a sync. One-way (Notion → Markdown). Nothing you change in the Markdown gets pushed back to Notion.
+One-way only. Notion stays the source of truth.
 
 ## Setup
 
-You'll need: a free GitHub account, a Notion workspace, and about an hour the first time. After that it runs itself.
+You need a free GitHub account, a Notion workspace, and about an hour the first time.
 
-### 1. Make your own copy of this repo
+### 1. Make your own copy
 
-Click **Use this template** at the top of this page → **Create a new repository**. Name it whatever you want (`my-notion-backup` works fine). Set it to **Private** — your backup content will live inside it, so it shouldn't be public.
+Click **Use this template** at the top → **Create a new repository**. Set it to **Private** — your backup content lives in it.
 
 ### 2. Create a Notion integration
 
-Go to `notion.so/my-integrations` → **+ New integration**. Name it something recognisable like "GitHub Backup", pick your workspace, leave the type as Internal. Submit.
+`notion.so/my-integrations` → **+ New integration**. Name it "GitHub Backup", pick your workspace, leave type as Internal. Submit.
 
-On the next screen, find **Capabilities** and set it to **Read content** only. Then find the **Internal Integration Token** — it's a long string starting with `ntn_` or `secret_`. Click Show, copy it, paste it somewhere safe temporarily like a password manager. You'll use it in step 4.
+On the next screen, set **Capabilities** to **Read content** only. Copy the **Internal Integration Token** (long string starting with `ntn_`) and keep it somewhere safe — you'll need it in step 4.
 
 ### 3. Share your pages with the integration
 
-A fresh Notion integration starts with access to nothing. You have to invite it to each top-level page you want backed up. Sub-pages and child databases inherit, so this is only top-level.
+A fresh integration sees nothing. For each top-level page in your sidebar:
 
-For each page in your sidebar that matters:
+`•••` menu → Connections → Add connections → find your integration → confirm.
 
-- Open the page
-- Click the `•••` menu top-right
-- Connections → Add connections → search for your integration name → confirm
+Sub-pages inherit, so top-level is enough.
 
 ### 4. Add your token to GitHub
 
 In your repo: **Settings → Secrets and variables → Actions → New repository secret**.
 
-- Name: `NOTION_TOKEN` (this exact name, case matters)
-- Secret: the token you copied in step 2
-
-Click Add. GitHub encrypts the value. Even you can't view it again afterwards — only the workflow can.
+- Name: `NOTION_TOKEN` (exact, case matters)
+- Secret: the token from step 2
 
 ### 5. Run it
 
-**Actions tab → Notion Backup → Run workflow → Run workflow** (leave the branch as main).
+**Actions tab → Notion Backup → Run workflow → Run workflow**.
 
-The first run can take 15-30 minutes depending on how much you have in Notion. When the green check appears, look at your `backup/` folder — there should be one file per page and database row.
+First run is 15-30 minutes for a large workspace. When the green check appears, your `backup/` folder is populated. It runs itself every Sunday from then on.
 
-It'll also run automatically every Sunday from now on.
+### 6. (Optional) Open in Obsidian
 
-### 6. (Optional) Open it in Obsidian
+Install [GitHub Desktop](https://desktop.github.com), clone the repo locally. Install [Obsidian](https://obsidian.md), open the `backup` subfolder as a vault.
 
-Install [GitHub Desktop](https://desktop.github.com). Clone your repo to a local folder. Install [Obsidian](https://obsidian.md). Open Obsidian → "Open folder as vault" → point at the `backup` subfolder inside the folder GitHub Desktop made.
+Weekly: open GitHub Desktop, Fetch → Pull.
 
-To pull fresh content after the weekly run: open GitHub Desktop, click **Fetch origin**, then **Pull origin** when something's new.
+Once you're in Obsidian, open the **Graph View** (sidebar icon, or `Cmd+G`) to see your workspace as a connected network. Worth doing once just to see what your scaffolding actually looks like from above.
 
 ## Configuration
 
-- **Change the schedule**: edit the `cron` line in `.github/workflows/backup.yml`. Use crontab.guru if you don't speak cron natively.
-- **Exclude databases**: add their exact names (as they appear in your `backup/` subfolders) to the `EXCLUDED_DATABASES` list at the top of `backup.py`.
-- **Cleaner alternative**: just remove the integration's connection from a database in Notion (the `•••` menu → Connections → remove). That's the simpler way for permanent exclusions and doesn't require touching code.
+- **Schedule**: edit the `cron` line in `.github/workflows/backup.yml`. Use crontab.guru if you don't read cron.
+- **Exclude databases**: add names (exactly as they appear in `backup/`) to `EXCLUDED_DATABASES` in `backup.py`.
+- **Or disconnect in Notion**: remove the integration's connection from the database directly. Cleaner for permanent exclusions.
 
 ## Limitations
 
-Honest about what this doesn't do well, since you should know before you depend on it:
-
-- **One-way only.** Edits in Markdown don't sync back to Notion. Notion stays the source of truth.
-- **Some block types aren't handled.** Mostly the exotic ones — synced blocks, equations, fancy embeds. They show up as HTML comments noting the unsupported type. Common stuff (paragraphs, headings, lists, code, callouts, quotes, to-dos) is fine.
-- **Linked database resolution is partial.** Inline databases back up cleanly. Linked-database *views* embedded in page bodies sometimes show as "unresolved" because Notion's API doesn't always expose what they point to.
-- **Big workspaces are slow.** ~2,000+ pages takes 20-30 minutes per run, due to API rate limits (3 requests/second). Free tier of GitHub Actions allows 2,000 minutes/month for private repos, so this isn't a problem in practice.
-- **Not official.** This isn't a Notion product. They've changed their API mid-build before (the data sources split in September 2025) and will probably do it again. If something breaks, check Notion's changelog first.
+- **One-way.** Markdown edits don't go back to Notion.
+- **Common blocks supported.** Paragraphs, headings, lists, code, callouts, quotes, to-dos all fine. Exotic blocks (synced blocks, equations, embeds) show as comments noting the type.
+- **Linked databases partial.** Inline databases back up cleanly. Linked-database *views* embedded in pages sometimes show as unresolved.
+- **Slow on large workspaces.** 2,000+ pages takes 20-30 min per run. Well within GitHub Actions' free 2,000 min/month for private repos.
+- **Not official.** Not a Notion product. They've changed their API mid-build before and will again.
 
 ## Licence
 
-MIT. Do whatever you want with the code, just keep the copyright notice.
+MIT.
