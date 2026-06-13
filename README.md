@@ -1,8 +1,6 @@
 # Notion-to-Obsidian
 Back up your Notion workspace to GitHub as Markdown each week. Useful for disaster recovery, offline reading, or building a Zettelkasten-style vault in Obsidian.
 
-----
-
 I built this because Notion is great until you can't get to it. All my important stuff lives there. If Notion goes down or my account gets locked, I lose access. And Notion's own export gives you JSON and CSV that's fine for a worst-case restore but useless otherwise.
 
 This makes a second copy of your workspace in Markdown — readable, searchable, owned. It runs weekly via GitHub Actions for free. Drop it into Obsidian and you get an offline vault with relations preserved as wikilinks, plus Obsidian's graph view: an interactive map of how everything in your workspace connects. Notion doesn't offer that.
