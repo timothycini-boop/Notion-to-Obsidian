@@ -62,8 +62,7 @@ Once you're in Obsidian, open the **Graph View** (sidebar icon, or `Cmd+G`) to s
 - **Common blocks supported.** Paragraphs, headings, lists, code, callouts, quotes, to-dos all fine. Exotic blocks (synced blocks, equations, embeds) show as comments noting the type.
 - **Linked databases partial.** Inline databases back up cleanly. Linked-database *views* embedded in pages sometimes show as unresolved.
 - **Slow on large workspaces.** 2,000+ pages takes 20-30 min per run. Well within GitHub Actions' free 2,000 min/month for private repos.
-- **Not official.** Not a Notion product. They've changed their API mid-build before and will again.
-
+- **Not official.** Not a Notion product. 
 ## Licence
 
 MIT.
